@@ -8,6 +8,7 @@ import torch
 import torch.nn as nn
 import io
 import os
+from backend.environment import estimate_storage_demo
 
 app = FastAPI(
     title="Shelf Life Prediction API",
@@ -132,6 +133,16 @@ async def predict(
         "fresh" if freshness_score >= 0.5 else "rotten"
     )
 
+    environment_result = estimate_storage_demo(
+        produce_type=produce_type,
+        freshness_score=freshness_score,
+        temperature=temperature,
+        humidity=humidity,
+        storage_days=storage_days
+    )
+
+
+
     return {
         "produce_type": produce_type,
         "freshness_score": round(freshness_score, 4),
@@ -140,9 +151,21 @@ async def predict(
         "humidity_percent": humidity,
         "storage_days": storage_days,
         "predicted_remaining_days": None,
+        "illustrative_remaining_days": (
+            environment_result["illustrative_remaining_days"]
+        ),
+        "storage_reference": (
+            environment_result["storage_reference"]
+        ),
+        "estimation_method": (
+            environment_result["estimation_method"]
+        ),
+        "shelf_life_model_status": "demo_only",
+        "validated": False,
         "recommendations": [
-            "Shelf-life estimation is not yet validated.",
-            "Inspect produce for spoilage before consumption."
+            "The remaining-days estimate is illustrative only.",
+            "Do not use this estimate to determine food safety.",
+            "Inspect produce for signs of spoilage."
         ],
-        "shelf_life_model_status": "not_trained"
+        "disclaimer": environment_result["disclaimer"]
     }
