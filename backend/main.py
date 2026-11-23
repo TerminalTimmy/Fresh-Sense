@@ -34,6 +34,10 @@ app.add_middleware(
     allow_headers=["*"]
 )
 
+# Limit PyTorch CPU threads to reduce memory usage.
+torch.set_num_threads(1)
+torch.set_num_interop_threads(1)
+
 device = torch.device("cpu")
 
 MODEL_PATH = os.getenv(
