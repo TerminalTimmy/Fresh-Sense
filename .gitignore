@@ -40,3 +40,6 @@ Thumbs.db
 !backend/models/*.pth
 !backend/models/*.joblib
 !backend/models/*.json
+
+# Public frontend production configuration
+!frontend/.env.production
