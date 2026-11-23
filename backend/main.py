@@ -8,7 +8,10 @@ import torch
 import torch.nn as nn
 import io
 import os
-from backend.environment import estimate_storage_demo
+from backend.environment import (
+    estimate_storage_demo,
+    get_storage_recommendations
+)
 
 app = FastAPI(
     title="Shelf Life Prediction API",
@@ -162,10 +165,14 @@ async def predict(
         ),
         "shelf_life_model_status": "demo_only",
         "validated": False,
-        "recommendations": [
-            "The remaining-days estimate is illustrative only.",
-            "Do not use this estimate to determine food safety.",
-            "Inspect produce for signs of spoilage."
-        ],
-        "disclaimer": environment_result["disclaimer"]
+
+"recommendations": get_storage_recommendations(
+    produce_type=produce_type,
+    temperature=temperature,
+    humidity=humidity,
+    freshness_status=freshness_status
+),
+        "disclaimer": (
+            environment_result["disclaimer"]
+        )
     }
