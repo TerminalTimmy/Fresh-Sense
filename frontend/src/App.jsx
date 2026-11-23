@@ -175,17 +175,36 @@ function App() {
     }
 
     try {
-      const response = await fetch(`${API_URL}/predict`, {
-        method: "POST",
-        body: formData,
-      });
+      let response;
+
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        try {
+          response = await fetch(`${API_URL}/predict`, {
+            method: "POST",
+            body: formData,
+          });
+        } catch (networkError) {
+          if (attempt === 0) {
+            await new Promise((resolve) => setTimeout(resolve, 3000));
+            continue;
+          }
+          throw networkError;
+        }
+
+        if ([502, 503, 504].includes(response.status) && attempt === 0) {
+          await new Promise((resolve) => setTimeout(resolve, 3000));
+          continue;
+        }
+
+        break;
+      }
 
       if (!response.ok) {
         const body = await response.json().catch(() => null);
         throw new Error(
           typeof body?.detail === "string"
             ? body.detail
-            : `Prediction failed (HTTP ${response.status}).`
+            : `Prediction failed (HTTP ${response.status}). Please try again shortly.`
         );
       }
 
