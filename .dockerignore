@@ -1,0 +1,14 @@
+.git
+.github
+frontend
+data
+notebooks
+docs
+ml
+**/__pycache__
+**/*.pyc
+**/*.backup
+**/.env
+**/.env.*
+**/node_modules
+**/dist

@@ -1,0 +1,45 @@
+# Python caches
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Environment variables and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Node dependencies and build outputs
+node_modules/
+dist/
+.vite/
+
+# Local datasets
+data/
+
+# Temporary backups
+*.backup
+*.bak
+
+# OS and editor files
+.DS_Store
+Thumbs.db
+.vscode/
+
+# Logs
+*.log
+
+# Keep trained deployment models
+!backend/models/
+!backend/models/*.pth
+!backend/models/*.joblib
+!backend/models/*.json
+
+# Public frontend production configuration
+!frontend/.env.production

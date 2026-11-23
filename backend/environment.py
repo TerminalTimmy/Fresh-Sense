@@ -92,3 +92,61 @@ def estimate_storage_demo(
             "Do not use for food safety decisions."
         )
     }
+
+def get_storage_recommendations(
+    produce_type: str,
+    temperature: float,
+    humidity: float,
+    freshness_status: str
+) -> list[str]:
+    """Return general storage guidance for supported produce."""
+
+    recommendations = []
+
+    if freshness_status == "rotten":
+        recommendations.append(
+            "Visible spoilage is suspected. Do not rely on "
+            "the shelf-life estimate to assess food safety."
+        )
+
+    if produce_type == "apple":
+        recommendations.append(
+            "Store apples in a refrigerator when possible."
+        )
+        if temperature > 10:
+            recommendations.append(
+                "Cooler storage generally slows apple deterioration."
+            )
+
+    elif produce_type == "banana":
+        recommendations.append(
+            "Store unripe bananas at room temperature, "
+            "away from direct sunlight."
+        )
+        if temperature < 12:
+            recommendations.append(
+                "Low temperatures can cause chilling injury "
+                "in bananas."
+            )
+
+    elif produce_type == "orange":
+        recommendations.append(
+            "Store oranges in a cool, ventilated environment."
+        )
+        if temperature > 15:
+            recommendations.append(
+                "Refrigeration may help extend orange storage life."
+            )
+
+    if humidity < 40:
+        recommendations.append(
+            "Low humidity may increase moisture loss "
+            "in fresh produce."
+        )
+
+    recommendations.append(
+        "Inspect produce regularly for mold, "
+        "unusual odors, and visible deterioration."
+    )
+
+    return recommendations

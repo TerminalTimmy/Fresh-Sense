@@ -8,7 +8,11 @@ import torch
 import torch.nn as nn
 import io
 import os
-from backend.environment import estimate_storage_demo
+from backend.shelf_life_model import predict_remaining_days
+from backend.environment import (
+    estimate_storage_demo,
+    get_storage_recommendations
+)
 
 app = FastAPI(
     title="Shelf Life Prediction API",
@@ -79,7 +83,8 @@ async def predict(
     temperature: float = Form(...),
     humidity: float = Form(...),
     storage_days: float = Form(...),
-    produce_type: str = Form(...)
+    produce_type: str = Form(...),
+    storage_environment: str | None = Form(None)
 ):
     produce_type = produce_type.lower().strip()
 
@@ -143,6 +148,25 @@ async def predict(
 
 
 
+
+    regression_result = None
+
+    if storage_environment is not None:
+        storage_environment = storage_environment.lower().strip()
+
+        if storage_environment not in {"room", "shade", "sun"}:
+            raise HTTPException(
+                status_code=422,
+                detail="Storage environment must be room, shade, or sun"
+            )
+
+        regression_result = predict_remaining_days(
+            produce_type=produce_type,
+            storage=storage_environment,
+            temperature=temperature,
+            storage_days=storage_days,
+        )
+
     return {
         "produce_type": produce_type,
         "freshness_score": round(freshness_score, 4),
@@ -150,7 +174,10 @@ async def predict(
         "temperature_c": temperature,
         "humidity_percent": humidity,
         "storage_days": storage_days,
-        "predicted_remaining_days": None,
+        "predicted_remaining_days": (
+            regression_result["predicted_remaining_days"]
+            if regression_result else None
+        ),
         "illustrative_remaining_days": (
             environment_result["illustrative_remaining_days"]
         ),
@@ -158,14 +185,29 @@ async def predict(
             environment_result["storage_reference"]
         ),
         "estimation_method": (
-            environment_result["estimation_method"]
+            regression_result["estimation_method"]
+            if regression_result
+            else environment_result["estimation_method"]
         ),
-        "shelf_life_model_status": "demo_only",
+        "shelf_life_model_status": (
+            "experimental" if regression_result else "demo_only"
+        ),
+        "prediction_target": (
+            regression_result["prediction_target"]
+            if regression_result else None
+        ),
+        "storage_environment": storage_environment,
         "validated": False,
-        "recommendations": [
-            "The remaining-days estimate is illustrative only.",
-            "Do not use this estimate to determine food safety.",
-            "Inspect produce for signs of spoilage."
-        ],
-        "disclaimer": environment_result["disclaimer"]
+
+"recommendations": get_storage_recommendations(
+    produce_type=produce_type,
+    temperature=temperature,
+    humidity=humidity,
+    freshness_status=freshness_status
+),
+        "disclaimer": (
+            regression_result["disclaimer"]
+            if regression_result
+            else environment_result["disclaimer"]
+        )
     }

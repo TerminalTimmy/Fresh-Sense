@@ -1,0 +1,26 @@
+{
+  "dataset": "FruitLife v1.5",
+  "target": "Approximate days until spoilage stage 3",
+  "target_method": "Midpoint of observed event interval",
+  "evaluation": "6-fold GroupKFold by physical specimen",
+  "mae_days": 0.8396727580750899,
+  "rmse_days": 1.3549303090811773,
+  "r2": 0.5417228354431083,
+  "observations": 474,
+  "independent_specimens": 48,
+  "features": [
+    "class",
+    "storage",
+    "ambient_temp_c",
+    "elapsed_hours"
+  ],
+  "limitations": [
+    "Exploratory research model, not food-safety validated",
+    "Only six independent specimens per fruit type",
+    "Humidity unavailable in training data",
+    "Temperature is reconstructed or fixed setpoint",
+    "Stage-3 transition time approximated by interval midpoint",
+    "Oranges not represented in the training dataset",
+    "Visual MobileNetV2 scores are not yet included"
+  ]
+}
