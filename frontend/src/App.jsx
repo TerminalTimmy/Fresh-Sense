@@ -293,7 +293,13 @@ function App() {
 
       setResult(await response.json());
     } catch (err) {
-      setError(err.message || "Could not connect to the prediction API.");
+      if (err.message === "Failed to fetch" || err.name === "TypeError") {
+        setError(
+          "Could not connect to the backend server. It may be waking up from sleep (Render free tier) — please wait 30 seconds and tap Analyze again."
+        );
+      } else {
+        setError(err.message || "Could not connect to the prediction API.");
+      }
     } finally {
       setLoading(false);
     }
