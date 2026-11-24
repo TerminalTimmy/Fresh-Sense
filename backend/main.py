@@ -2,10 +2,8 @@
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from PIL import Image, UnidentifiedImageError
-from torchvision.models import mobilenet_v2
-from torchvision import transforms
-import torch
-import torch.nn as nn
+import numpy as np
+import onnxruntime as ort
 import io
 import os
 from backend.shelf_life_model import predict_remaining_days
@@ -41,43 +39,53 @@ app.add_middleware(
     allow_headers=["*"]
 )
 
-# Limit PyTorch CPU threads to reduce memory usage.
-torch.set_num_threads(1)
-torch.set_num_interop_threads(1)
-
-device = torch.device("cpu")
-
 MODEL_PATH = os.getenv(
     "VISION_MODEL_PATH",
-    "backend/models/vision_model.pth"
+    "backend/models/vision_model.onnx"
 )
 
-checkpoint = torch.load(
+session = ort.InferenceSession(
     MODEL_PATH,
-    map_location=device,
-    weights_only=True
+    providers=["CPUExecutionProvider"]
 )
+INPUT_NAME = session.get_inputs()[0].name
 
-model = mobilenet_v2(weights=None)
-model.classifier[1] = nn.Linear(
-    model.last_channel, 2
-)
+# ImageNet normalization constants
+IMAGENET_MEAN = np.array([0.485, 0.456, 0.406], dtype=np.float32)
+IMAGENET_STD = np.array([0.229, 0.224, 0.225], dtype=np.float32)
 
-model.load_state_dict(
-    checkpoint["model_state_dict"]
-)
 
-model.eval()
+def preprocess_image(img: Image.Image) -> np.ndarray:
+    """Replicate torchvision: Resize(256), CenterCrop(224), ToTensor, Normalize."""
+    # Resize so shortest side = 256, preserve aspect ratio
+    w, h = img.size
+    if w < h:
+        new_w = 256
+        new_h = int(h * 256 / w)
+    else:
+        new_h = 256
+        new_w = int(w * 256 / h)
+    img = img.resize((new_w, new_h), Image.BILINEAR)
 
-transform = transforms.Compose([
-    transforms.Resize(256),
-    transforms.CenterCrop(224),
-    transforms.ToTensor(),
-    transforms.Normalize(
-        [0.485, 0.456, 0.406],
-        [0.229, 0.224, 0.225]
-    )
-])
+    # Center crop to 224x224
+    w, h = img.size
+    left = (w - 224) // 2
+    top = (h - 224) // 2
+    img = img.crop((left, top, left + 224, top + 224))
+
+    # Convert to float32 array [0, 1], then normalize
+    arr = np.array(img, dtype=np.float32) / 255.0  # (224, 224, 3)
+    arr = (arr - IMAGENET_MEAN) / IMAGENET_STD
+
+    # HWC -> CHW, add batch dim
+    arr = arr.transpose(2, 0, 1)  # (3, 224, 224)
+    return arr[np.newaxis, ...]    # (1, 3, 224, 224)
+
+
+def softmax(logits: np.ndarray) -> np.ndarray:
+    exp = np.exp(logits - np.max(logits, axis=1, keepdims=True))
+    return exp / np.sum(exp, axis=1, keepdims=True)
+
 
 SUPPORTED_PRODUCE = {"apple", "banana", "orange"}
 
@@ -133,17 +141,16 @@ async def predict(
 
     try:
         img = Image.open(io.BytesIO(content)).convert("RGB")
-        tensor = transform(img).unsqueeze(0)
+        tensor = preprocess_image(img)
     except (UnidentifiedImageError, OSError, ValueError):
         raise HTTPException(
             status_code=422,
             detail="Invalid image file"
         )
 
-    with torch.inference_mode():
-        logits = model(tensor)
-        probabilities = torch.softmax(logits, dim=1)
-        freshness_score = float(probabilities[0, 1])
+    logits = session.run(None, {INPUT_NAME: tensor})[0]
+    probabilities = softmax(logits)
+    freshness_score = float(probabilities[0, 1])
 
     freshness_status = (
         "fresh" if freshness_score >= 0.5 else "rotten"
@@ -156,9 +163,6 @@ async def predict(
         humidity=humidity,
         storage_days=storage_days
     )
-
-
-
 
     regression_result = None
 
@@ -209,13 +213,12 @@ async def predict(
         ),
         "storage_environment": storage_environment,
         "validated": False,
-
-"recommendations": get_storage_recommendations(
-    produce_type=produce_type,
-    temperature=temperature,
-    humidity=humidity,
-    freshness_status=freshness_status
-),
+        "recommendations": get_storage_recommendations(
+            produce_type=produce_type,
+            temperature=temperature,
+            humidity=humidity,
+            freshness_status=freshness_status
+        ),
         "disclaimer": (
             regression_result["disclaimer"]
             if regression_result
