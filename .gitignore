@@ -38,6 +38,7 @@ Thumbs.db
 # Keep trained deployment models
 !backend/models/
 !backend/models/*.pth
+!backend/models/*.onnx
 !backend/models/*.joblib
 !backend/models/*.json
 
