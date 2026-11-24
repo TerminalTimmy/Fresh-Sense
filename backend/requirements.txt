@@ -5,6 +5,7 @@ python-multipart
 torch
 torchvision
 Pillow
+pillow-heif
 numpy
 pandas
 scikit-learn

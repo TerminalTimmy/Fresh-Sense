@@ -14,6 +14,13 @@ from backend.environment import (
     get_storage_recommendations
 )
 
+# Register HEIF/HEIC support so iPhones' native format is accepted.
+try:
+    from pillow_heif import register_heif_opener
+    register_heif_opener()
+except ImportError:
+    pass
+
 app = FastAPI(
     title="Shelf Life Prediction API",
     version="1.0.0"

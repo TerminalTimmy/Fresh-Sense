@@ -4,6 +4,71 @@ import "./App.css";
 
 const API_URL = (import.meta.env.VITE_API_URL || "").replace(/\/$/, "");
 
+const MAX_DIMENSION = 1024;
+const UPLOAD_QUALITY = 0.85;
+
+/**
+ * Compress an image file on the client side before uploading.
+ * - Resizes to fit within MAX_DIMENSION on the longest side
+ * - Converts HEIF/HEIC/WebP/etc to JPEG for backend compatibility
+ * - Returns a new File object
+ */
+function compressImage(file) {
+  return new Promise((resolve, reject) => {
+    // If the image is already small enough and is JPEG/PNG, skip compression
+    if (file.size < 500 * 1024 && /^image\/(jpeg|png)$/.test(file.type)) {
+      resolve(file);
+      return;
+    }
+
+    const url = URL.createObjectURL(file);
+    const img = new window.Image();
+
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+
+      let { width, height } = img;
+
+      // Scale down if needed
+      if (width > MAX_DIMENSION || height > MAX_DIMENSION) {
+        const scale = MAX_DIMENSION / Math.max(width, height);
+        width = Math.round(width * scale);
+        height = Math.round(height * scale);
+      }
+
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(img, 0, 0, width, height);
+
+      canvas.toBlob(
+        (blob) => {
+          if (!blob) {
+            reject(new Error("Image compression failed."));
+            return;
+          }
+          const compressed = new File(
+            [blob],
+            file.name.replace(/\.[^.]+$/, ".jpg"),
+            { type: "image/jpeg" }
+          );
+          resolve(compressed);
+        },
+        "image/jpeg",
+        UPLOAD_QUALITY
+      );
+    };
+
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("Could not read the selected image."));
+    };
+
+    img.src = url;
+  });
+}
+
 const produceOptions = [
   { value: "apple", name: "Apple", emoji: "🍎" },
   { value: "banana", name: "Banana", emoji: "🍌" },
@@ -36,7 +101,7 @@ function App() {
     };
   }, []);
 
-  function handleImageChange(event) {
+  async function handleImageChange(event) {
     const file = event.target.files?.[0];
     if (!file) return;
 
@@ -45,21 +110,28 @@ function App() {
       return;
     }
 
-    if (file.size > 10 * 1024 * 1024) {
-      setError("Please select an image smaller than 10 MB.");
+    if (file.size > 20 * 1024 * 1024) {
+      setError("Please select an image smaller than 20 MB.");
       return;
     }
 
-    if (previewUrlRef.current) {
-      URL.revokeObjectURL(previewUrlRef.current);
-    }
-
-    const url = URL.createObjectURL(file);
-    previewUrlRef.current = url;
-    setImage(file);
-    setPreview(url);
-    setResult(null);
     setError("");
+
+    try {
+      const compressed = await compressImage(file);
+
+      if (previewUrlRef.current) {
+        URL.revokeObjectURL(previewUrlRef.current);
+      }
+
+      const url = URL.createObjectURL(compressed);
+      previewUrlRef.current = url;
+      setImage(compressed);
+      setPreview(url);
+      setResult(null);
+    } catch (err) {
+      setError(err.message || "Could not process the selected image.");
+    }
   }
 
   async function fetchWeather() {
@@ -179,11 +251,22 @@ function App() {
 
       for (let attempt = 0; attempt < 2; attempt += 1) {
         try {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 60000);
+
           response = await fetch(`${API_URL}/predict`, {
             method: "POST",
             body: formData,
+            signal: controller.signal,
           });
+
+          clearTimeout(timeoutId);
         } catch (networkError) {
+          if (networkError.name === "AbortError") {
+            throw new Error(
+              "The analysis timed out. The server may be waking up — please try again in a moment."
+            );
+          }
           if (attempt === 0) {
             await new Promise((resolve) => setTimeout(resolve, 3000));
             continue;
@@ -263,7 +346,6 @@ function App() {
                 ref={fileInputRef}
                 type="file"
                 accept="image/*"
-                capture="environment"
                 onChange={handleImageChange}
                 className="visually-hidden"
                 id="fruit-image"
